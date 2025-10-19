@@ -1,70 +1,120 @@
 <?php
+require_once __DIR__ . '/../config/Database.php';
+
 class User {
-    private $dataFile = __DIR__ . '/../../data/users.json';
+    private $conn;
+    private $table = 'users';
     
     public function __construct() {
-        if (!file_exists($this->dataFile)) {
-            file_put_contents($this->dataFile, json_encode([]));
-        }
-    }
-    
-    private function getData() {
-        return json_decode(file_get_contents($this->dataFile), true) ?? [];
-    }
-    
-    private function saveData($data) {
-        file_put_contents($this->dataFile, json_encode($data, JSON_PRETTY_PRINT));
+        $database = Database::getInstance();
+        $this->conn = $database->getConnection();
     }
     
     public function create($username, $email, $password) {
-        $users = $this->getData();
-        
-        // Cek username sudah ada
-        foreach ($users as $user) {
-            if ($user['username'] === $username || $user['email'] === $email) {
+        try {
+            $query = "SELECT id FROM {$this->table} WHERE username = :username OR email = :email";
+            $stmt = $this->conn->prepare($query);
+            $stmt->execute([
+                ':username' => $username,
+                ':email' => $email
+            ]);
+            
+            if ($stmt->rowCount() > 0) {
                 return false;
             }
+
+            $query = "INSERT INTO {$this->table} (username, email, password) VALUES (:username, :email, :password)";
+            $stmt = $this->conn->prepare($query);
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            
+            $stmt->execute([
+                ':username' => $username,
+                ':email' => $email,
+                ':password' => $hashedPassword
+            ]);
+            
+            return $this->conn->lastInsertId();
+        } catch(PDOException $e) {
+            error_log("User Create Error: " . $e->getMessage());
+            return false;
         }
-        
-        $newUser = [
-            'id' => count($users) + 1,
-            'username' => $username,
-            'email' => $email,
-            'password' => password_hash($password, PASSWORD_DEFAULT),
-            'created_at' => date('Y-m-d H:i:s')
-        ];
-        
-        $users[] = $newUser;
-        $this->saveData($users);
-        return $newUser['id'];
     }
     
     public function findByUsername($username) {
-        $users = $this->getData();
-        foreach ($users as $user) {
-            if ($user['username'] === $username) {
-                return $user;
-            }
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE username = :username LIMIT 1";
+            $stmt = $this->conn->prepare($query);
+            $stmt->execute([':username' => $username]);
+            
+            return $stmt->fetch();
+        } catch(PDOException $e) {
+            error_log("User Find Error: " . $e->getMessage());
+            return null;
         }
-        return null;
     }
     
     public function findById($id) {
-        $users = $this->getData();
-        foreach ($users as $user) {
-            if ($user['id'] == $id) {
-                return $user;
-            }
+        try {
+            $query = "SELECT * FROM {$this->table} WHERE id = :id LIMIT 1";
+            $stmt = $this->conn->prepare($query);
+            $stmt->execute([':id' => $id]);
+            
+            return $stmt->fetch();
+        } catch(PDOException $e) {
+            error_log("User Find Error: " . $e->getMessage());
+            return null;
         }
-        return null;
     }
     
     public function verifyPassword($username, $password) {
         $user = $this->findByUsername($username);
+        
         if ($user && password_verify($password, $user['password'])) {
             return $user;
         }
+        
         return false;
+    }
+    
+    public function getAll() {
+        try {
+            $query = "SELECT id, username, email, created_at FROM {$this->table} ORDER BY id DESC";
+            $stmt = $this->conn->prepare($query);
+            $stmt->execute();
+            
+            return $stmt->fetchAll();
+        } catch(PDOException $e) {
+            error_log("User GetAll Error: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    public function update($id, $username, $email) {
+        try {
+            $query = "UPDATE {$this->table} SET username = :username, email = :email WHERE id = :id";
+            $stmt = $this->conn->prepare($query);
+            
+            return $stmt->execute([
+                ':id' => $id,
+                ':username' => $username,
+                ':email' => $email
+            ]);
+        } catch(PDOException $e) {
+            error_log("User Update Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    public function delete($id) {
+        try {
+            $query = "DELETE FROM {$this->table} WHERE id = :id";
+            $stmt = $this->conn->prepare($query);
+            
+            return $stmt->execute([':id' => $id]);
+        } catch(PDOException $e) {
+            error_log("User Delete Error: " . $e->getMessage());
+            return false;
+        }
     }
 }
 ?>
