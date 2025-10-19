@@ -1,3 +1,7 @@
 UTS PWEB MVC TM
 
-menggunakan data berbasis json tanpa sql (localhost)
+Demo penerapan MVC pada web berbasis native PHP
+Apabila ingin dijalankan via localhost, disarankan menggunakan XAMPP,
+lalu run database.sql (untuk build dan insert dummy data) dengan MySQL
+
+link deploy: 
